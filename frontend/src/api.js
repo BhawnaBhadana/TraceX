@@ -1,46 +1,50 @@
-import { alerts, categories, entities, evidence, investigations, records, relationships, trends } from "./demo-data.js";
-import { getState } from "./state.js";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const clone = (value) => JSON.parse(JSON.stringify(value));
-const wait = (value) => Promise.resolve(clone(value));
+function getToken() {
+  return localStorage.getItem("tracex_token");
+}
+
+async function request(path, options = {}) {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...options,
+  });
+  if (res.status === 401) {
+    localStorage.removeItem("tracex_token");
+    localStorage.removeItem("tracex_user");
+    window.location.hash = "login";
+    throw new Error("Session expired");
+  }
+  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+  return res.json();
+}
 
 export const api = {
-  getInvestigations: () => wait(investigations),
-  getEntities: () => wait(entities),
-  getEntity: (id) => wait(entities.find((entity) => entity.id === id) ?? null),
-  getRelationships: () => wait(relationships),
-  getAlerts: () => wait(alerts),
-  getTrends: () => wait(trends),
-  getEvidence: () => wait(evidence),
-  getRecords: () => wait(records),
-  getCategories: () => wait(categories),
-  verifySignal: (id) => {
-    const alert = alerts.find((item) => item.id === id);
-    if (alert) alert.status = "VERIFIED";
-    const item = evidence.find((entry) => alert?.evidenceIds.includes(entry.id));
-    if (item) item.status = "VERIFIED";
-    return wait({ alert, evidence: item, actor: getState().user.name });
-  },
-  rejectSignal: (id) => {
-    const alert = alerts.find((item) => item.id === id);
-    if (alert) alert.status = "REJECTED";
-    return wait({ alert, actor: getState().user.name });
-  },
-  requestMoreEvidence: (id) => {
-    const alert = alerts.find((item) => item.id === id);
-    if (alert) alert.status = "NEEDS MORE EVIDENCE";
-    return wait({ alert, actor: getState().user.name });
-  },
-  acknowledgeAlert: (id) => {
-    const alert = alerts.find((item) => item.id === id);
-    if (alert) alert.status = "ACKNOWLEDGED";
-    return wait(alert);
-  },
-  generateReport: () => wait({
-    id: `REPORT-${Date.now().toString().slice(-6)}`,
-    title: "Operation Orion Intelligence Report",
-    generatedAt: new Date().toISOString(),
-    investigation: getState().currentInvestigation,
-    sections: 12
-  })
+  getInvestigations: () => request("/investigations"),
+  getEntities: () => request("/entities"),
+  getEntity: (id) => request(`/entities/${id}`),
+  getEntityScore: (id) => request(`/entities/${id}/score`),
+  getEntityMatches: (id) => request(`/entities/${id}/matches`),
+  getEntityNetworkMetrics: (id) => request(`/entities/${id}/network-metrics`),
+  getRelationships: () => request("/relationships"),
+  getAlerts: () => request("/alerts"),
+  getTrends: () => request("/trends"),
+  getEvidence: () => request("/evidence"),
+  getRecords: () => request("/records"),
+  getCategories: () => request("/categories"),
+  getNotifications: () => request("/notifications"),
+
+  login: (email, password) =>
+    request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+
+  verifySignal: (id) => request(`/alerts/${id}/verify`, { method: "POST" }),
+  rejectSignal: (id) => request(`/alerts/${id}/reject`, { method: "POST" }),
+  requestMoreEvidence: (id) => request(`/alerts/${id}/request-evidence`, { method: "POST" }),
+  acknowledgeAlert: (id) => request(`/alerts/${id}/acknowledge`, { method: "POST" }),
+
+  generateReport: () => request("/reports/generate", { method: "POST" }),
 };
