@@ -1,6 +1,6 @@
 import pool from "../config/db.js";
 import { computeEntityScore, computeNetworkMetrics } from "../services/scoringService.js";
-import { findPotentialMatches } from "../services/resolutionService.js";
+import { findPotentialMatches } from "../services/entityResolutionService.js"; // fixed: was "resolutionService.js" (file didn't exist)
 
 export async function getEntities(req, res, next) {
   try {
