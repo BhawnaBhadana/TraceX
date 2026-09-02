@@ -7,7 +7,7 @@ export async function getAlerts(req, res, next) {
       `SELECT id, type, severity, priority, confidence, status,
               entity_ids AS "entityIds",
               evidence_ids AS "evidenceIds",
-              timestamp, what, why
+              timestamp, what, why, ai_summary AS "aiSummary"
        FROM alerts`
     );
     res.json(result.rows);
