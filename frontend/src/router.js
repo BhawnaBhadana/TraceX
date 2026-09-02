@@ -1,4 +1,4 @@
-const validRoutes = new Set(["dashboard", "investigations", "entities", "entity", "network", "timeline", "fusion", "trends", "alerts", "evidence", "reports", "audit", "login"]);
+const validRoutes = new Set(["dashboard", "investigations", "entities", "entity", "network", "timeline", "fusion", "trends", "alerts", "evidence", "reports", "audit", "login", "signup"]);
 const listeners = new Set();
 
 export function getRoute() {

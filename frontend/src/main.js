@@ -19,12 +19,14 @@ async function loadData() {
   try {
     const [
       investigationsRes, entitiesRes, relationshipsRes, alertsRes,
-      trendsRes, evidenceRes, recordsRes, categoriesRes,
+      trendsRes, evidenceRes, recordsRes, categoriesRes, notificationsRes,
     ] = await Promise.all([
       api.getInvestigations(), api.getEntities(), api.getRelationships(), api.getAlerts(),
-      api.getTrends(), api.getEvidence(), api.getRecords(), api.getCategories(),
+      api.getTrends(), api.getEvidence(), api.getRecords(), api.getCategories(), api.getNotifications(),
     ]);
-    investigations = investigationsRes;
+    // getInvestigations responds { success, investigations: [...] }; everything else
+    // responds with a plain array straight from the DB.
+    investigations = investigationsRes.investigations || [];
     entities = entitiesRes;
     relationships = relationshipsRes;
     alerts = alertsRes;
@@ -32,6 +34,7 @@ async function loadData() {
     evidence = evidenceRes;
     records = recordsRes;
     categories = categoriesRes;
+    setState({ notifications: notificationsRes });
     dataLoaded = true;
     dataError = null;
   } catch (err) {
@@ -74,6 +77,12 @@ function renderApp() {
 
   if (route === "login") {
     root.innerHTML = renderLogin();
+    refreshIcons();
+    return;
+  }
+
+  if (route === "signup") {
+    root.innerHTML = renderSignup();
     refreshIcons();
     return;
   }
@@ -123,13 +132,33 @@ function renderLogin() {
       <div class="brand-lockup login-brand"><div class="brand-mark">${icon("orbit")}</div><div><strong>TRACE<span>-X</span></strong><small>INTELLIGENCE WORKSPACE</small></div></div>
       <div class="login-intro"><span class="eyebrow">SECURE ACCESS GATEWAY</span><h1>From fragmented signals<br><em>to actionable intelligence.</em></h1><p>Investigate relationships, patterns and evidence in one analyst-controlled workspace.</p></div>
       <form class="login-form" data-login-form>
-        <label>Email<input name="username" value="apatel@tracex.local" autocomplete="username" /></label>
-        <label>Password<div class="password-field"><input name="password" type="password" value="ChangeMe123!" autocomplete="current-password" /><button type="button" class="icon-button" aria-label="Show password" data-action="toggle-password">${icon("eye")}</button></div></label>
+        <label>Email<input name="username" type="email" placeholder="you@agency.gov" autocomplete="username" required /></label>
+        <label>Password<div class="password-field"><input name="password" type="password" placeholder="••••••••" autocomplete="current-password" required /><button type="button" class="icon-button" aria-label="Show password" data-action="toggle-password">${icon("eye")}</button></div></label>
         <button class="button button-primary button-wide" type="submit">${icon("log-in")} SIGN IN</button>
       </form>
-      <div class="login-footer"><span>${icon("shield-check")} AUTHORIZED INTELLIGENCE ANALYSIS ENVIRONMENT</span><span>TRACE-X v0.9.4 · SYNTHETIC BUILD</span></div>
+      <p class="auth-switch">Don't have an account? <a href="#signup" data-route="signup">Create one</a></p>
+      <div class="login-footer"><span>${icon("shield-check")} AUTHORIZED INTELLIGENCE ANALYSIS ENVIRONMENT</span><span>TRACE-X v0.9.4</span></div>
     </section>
-    <aside class="login-side"><div class="side-kicker">OPERATION ORION</div><h2>One connected investigative story.</h2><div class="login-flow">${["Fragmented records", "Entity resolution", "Network discovery", "Evidence-backed action"].map((item, i) => `<div class="login-flow-item"><span>0${i + 1}</span><strong>${item}</strong></div>`).join("")}</div><p class="legal-copy">TRACE-X generates investigative signals for analyst review. Signals are not proof of criminal activity. This demonstration uses synthetic data.</p></aside>
+    <aside class="login-side"><div class="side-kicker">OPERATION ORION</div><h2>One connected investigative story.</h2><div class="login-flow">${["Fragmented records", "Entity resolution", "Network discovery", "Evidence-backed action"].map((item, i) => `<div class="login-flow-item"><span>0${i + 1}</span><strong>${item}</strong></div>`).join("")}</div><p class="legal-copy">TRACE-X generates investigative signals for analyst review. Signals are not proof of criminal activity.</p></aside>
+  </main>`;
+}
+
+function renderSignup() {
+  return `<main class="login-screen">
+    <div class="login-rail"></div>
+    <section class="login-card">
+      <div class="brand-lockup login-brand"><div class="brand-mark">${icon("orbit")}</div><div><strong>TRACE<span>-X</span></strong><small>INTELLIGENCE WORKSPACE</small></div></div>
+      <div class="login-intro"><span class="eyebrow">CREATE ANALYST ACCOUNT</span><h1>Join the<br><em>investigation workspace.</em></h1><p>Register a new analyst account to sign in and start working cases.</p></div>
+      <form class="login-form" data-signup-form>
+        <label>Full name<input name="name" placeholder="Analyst name" autocomplete="name" required /></label>
+        <label>Email<input name="email" type="email" placeholder="you@agency.gov" autocomplete="username" required /></label>
+        <label>Password<div class="password-field"><input name="password" type="password" placeholder="At least 8 characters" autocomplete="new-password" minlength="8" required /><button type="button" class="icon-button" aria-label="Show password" data-action="toggle-password">${icon("eye")}</button></div></label>
+        <button class="button button-primary button-wide" type="submit">${icon("user-plus")} CREATE ACCOUNT</button>
+      </form>
+      <p class="auth-switch">Already have an account? <a href="#login" data-route="login">Sign in</a></p>
+      <div class="login-footer"><span>${icon("shield-check")} AUTHORIZED INTELLIGENCE ANALYSIS ENVIRONMENT</span><span>TRACE-X v0.9.4</span></div>
+    </section>
+    <aside class="login-side"><div class="side-kicker">OPERATION ORION</div><h2>One connected investigative story.</h2><div class="login-flow">${["Fragmented records", "Entity resolution", "Network discovery", "Evidence-backed action"].map((item, i) => `<div class="login-flow-item"><span>0${i + 1}</span><strong>${item}</strong></div>`).join("")}</div><p class="legal-copy">New accounts default to the investigator role. An admin can promote your role from the database if you need elevated access.</p></aside>
   </main>`;
 }
 
@@ -139,12 +168,12 @@ function renderShell(route) {
   return `<div class="app-shell${collapsedClass}">
     <aside class="sidebar">
       <div class="sidebar-brand"><div class="brand-mark">${icon("orbit")}</div><div class="brand-wordmark"><strong>TRACE<span>-X</span></strong><small>CYBER INTELLIGENCE</small></div><button class="icon-button sidebar-toggle" data-action="collapse-sidebar" aria-label="Collapse navigation">${icon("panel-left-close")}</button></div>
-      <div class="sidebar-context"><span class="context-label">ACTIVE INVESTIGATION</span><button data-route="dashboard" class="context-button"><span><i class="active-pulse"></i>OPERATION ORION</span>${icon("chevron-down")}</button><span class="synthetic-label">${icon("flask-conical")} SYNTHETIC DEMONSTRATION DATA</span></div>
+      <div class="sidebar-context"><span class="context-label">ACTIVE INVESTIGATION</span><button data-route="dashboard" class="context-button"><span><i class="active-pulse"></i>OPERATION ORION</span>${icon("chevron-down")}</button><span class="synthetic-label">${icon("database")} LIVE DATABASE</span></div>
       <nav class="primary-nav" aria-label="Primary navigation">${navSections.map((section) => `<div class="nav-section"><div class="nav-label">${section.label}</div>${section.items.map((item) => `<button class="nav-item ${route === item.route ? "active" : ""}" data-route="${item.route}" title="${item.label}">${icon(item.icon)}<span>${item.label}</span>${item.count ? `<b>${item.count}</b>` : ""}</button>`).join("")}</div>`).join("")}</nav>
       <div class="sidebar-bottom"><div class="system-status"><span class="status-dot status-dot-live"></span><div><small>SYSTEM STATUS</small><strong>Operational</strong></div><span class="system-bars">▂▅▇</span></div><button class="nav-item" data-route="audit">${icon("settings-2")}<span>Workspace Settings</span></button></div>
     </aside>
     <div class="main-shell">
-      <header class="topbar"><div class="topbar-left"><button class="icon-button mobile-menu" data-action="collapse-sidebar" aria-label="Open navigation">${icon("menu")}</button><div class="breadcrumb"><span>TRACE-X</span><i>/</i><strong>${routeLabels[route] ?? "Workspace"}</strong></div></div><div class="topbar-actions"><button class="search-trigger" data-action="open-search">${icon("search")}<span>Search intelligence</span><kbd>⌘ K</kbd></button><button class="icon-button notification-trigger" data-action="open-notifications" aria-label="Notifications">${icon("bell")}<span class="notification-dot ${unread ? "visible" : ""}"></span></button><span class="demo-pill"><i></i> DEMO MODE</span><button class="profile-trigger" data-action="open-profile"><span class="avatar">${appState.user.initials}</span><span class="profile-copy"><strong>${escapeHtml(appState.user.name)}</strong><small>${escapeHtml(appState.user.role)}</small></span>${icon("chevron-down")}</button></div></header>
+      <header class="topbar"><div class="topbar-left"><button class="icon-button mobile-menu" data-action="collapse-sidebar" aria-label="Open navigation">${icon("menu")}</button><div class="breadcrumb"><span>TRACE-X</span><i>/</i><strong>${routeLabels[route] ?? "Workspace"}</strong></div></div><div class="topbar-actions"><button class="search-trigger" data-action="open-search">${icon("search")}<span>Search intelligence</span><kbd>⌘ K</kbd></button><button class="icon-button notification-trigger" data-action="open-notifications" aria-label="Notifications">${icon("bell")}<span class="notification-dot ${unread ? "visible" : ""}"></span></button><span class="demo-pill"><i></i> LIVE</span><button class="profile-trigger" data-action="open-profile"><span class="avatar">${appState.user.initials}</span><span class="profile-copy"><strong>${escapeHtml(appState.user.name)}</strong><small>${escapeHtml(appState.user.role)}</small></span>${icon("chevron-down")}</button></div></header>
       <main class="content-area">${renderPage(route)}</main>
     </div>
   </div>
@@ -152,7 +181,7 @@ function renderShell(route) {
 }
 
 function pageFrame(eyebrow, title, copy, actions = "") {
-  return `<div class="page-frame"><div class="page-header"><div><div class="eyebrow">${escapeHtml(eyebrow)}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(copy)}</p></div><div class="page-actions">${actions}</div></div><div class="data-ribbon"><span>${icon("flask-conical")} SYNTHETIC DEMONSTRATION DATA</span><span>${icon("shield-check")} AUDIT LOG ENABLED</span><span>${icon("fingerprint")} EVIDENCE INTEGRITY · SHA-256 ENABLED</span></div></div>`;
+  return `<div class="page-frame"><div class="page-header"><div><div class="eyebrow">${escapeHtml(eyebrow)}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(copy)}</p></div><div class="page-actions">${actions}</div></div><div class="data-ribbon"><span>${icon("database")} LIVE DATABASE</span><span>${icon("shield-check")} AUDIT LOG ENABLED</span><span>${icon("fingerprint")} EVIDENCE INTEGRITY · SHA-256 ENABLED</span></div></div>`;
 }
 
 function metricCard(label, value, delta, iconName, route, tone = "blue") {
@@ -642,6 +671,29 @@ document.addEventListener("submit", async (event) => {
     pushToast(`Signed in as ${user.name}`, "success");
   } catch (err) {
     pushToast("Invalid email or password", "error");
+  }
+});
+document.addEventListener("submit", async (event) => {
+  if (!event.target.matches("[data-signup-form]")) return;
+  event.preventDefault();
+  const formData = new FormData(event.target);
+  const name = formData.get("name");
+  const email = formData.get("email");
+  const password = formData.get("password");
+  try {
+    const { token, user } = await api.register(name, email, password);
+    localStorage.setItem("tracex_token", token);
+    localStorage.setItem("tracex_user", JSON.stringify(user));
+    setState({
+      user: { name: user.name, role: user.role.toUpperCase(), initials: initials(user.name) },
+      demoMode: false,
+    });
+    dataLoaded = false;
+    navigate("dashboard");
+    loadData();
+    pushToast(`Welcome, ${user.name}`, "success");
+  } catch (err) {
+    pushToast(err.message.includes("409") ? "That email is already registered" : "Registration failed", "error");
   }
 });
 document.addEventListener("click", (event) => { const target = event.target.closest("[data-action=submit-review]"); if (target) submitReview(target.dataset.alertId); });

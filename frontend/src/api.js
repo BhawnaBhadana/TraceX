@@ -41,6 +41,9 @@ export const api = {
   login: (email, password) =>
     request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
 
+  register: (name, email, password) =>
+    request("/auth/register", { method: "POST", body: JSON.stringify({ name, email, password }) }),
+
   verifySignal: (id) => request(`/alerts/${id}/verify`, { method: "POST" }),
   rejectSignal: (id) => request(`/alerts/${id}/reject`, { method: "POST" }),
   requestMoreEvidence: (id) => request(`/alerts/${id}/request-evidence`, { method: "POST" }),

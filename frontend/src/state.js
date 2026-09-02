@@ -1,5 +1,3 @@
-import { notifications as demoNotifications } from "./demo-data.js";
-
 const listeners = new Set();
 
 export const appState = {
@@ -9,11 +7,11 @@ export const appState = {
   selectedAlert: "ALERT-009",
   selectedEvidence: "EVD-0087",
   selectedTrend: "TREND-01",
-  demoMode: true,
+  demoMode: false,
   route: "dashboard",
   sidebarCollapsed: false,
   filters: { range: "30d", severity: "ALL", alertStatus: "ALL", entityQuery: "" },
-  notifications: demoNotifications.map((item) => ({ ...item })),
+  notifications: [],
   toast: null,
   lastAction: null
 };
