@@ -10,14 +10,16 @@ export async function getRecords(req, res, next) {
   try {
     const result = await pool.query(
       `SELECT id, entity_id AS "entityId", source_id AS "sourceId",
-              type, title, snippet, timestamp, confidence, topic
+              source AS "sourceLabel",
+              type, title, snippet, timestamp,
+              COALESCE(confidence, 0) AS confidence,
+              topic
        FROM signals`
     );
     res.json(result.rows);
   } catch (err) { next(err); }
 }
 
-// POST /api/records/:id/analyze — extract candidate entities from an existing signal's snippet
 export async function analyzeRecord(req, res, next) {
   try {
     const { id } = req.params;
@@ -30,7 +32,6 @@ export async function analyzeRecord(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// GET /api/records/:id/candidates — list previously extracted candidates for a signal
 export async function getRecordCandidates(req, res, next) {
   try {
     const result = await pool.query(
@@ -44,14 +45,10 @@ export async function getRecordCandidates(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// PATCH /api/records/candidates/:candidateId — analyst confirms/rejects a candidate.
-// On CONFIRMED, this now actually runs correlation (resolve/create entity + build
-// relationships) and checks whether the resulting entity should raise an alert —
-// so confirming a candidate has a real, visible effect on the rest of the app.
 export async function reviewCandidate(req, res, next) {
   try {
     const { candidateId } = req.params;
-    const { status, matchedEntityId } = req.body; // status: 'CONFIRMED' | 'REJECTED'
+    const { status, matchedEntityId } = req.body;
     if (!["CONFIRMED", "REJECTED"].includes(status)) {
       return res.status(400).json({ success: false, message: "status must be CONFIRMED or REJECTED" });
     }
@@ -85,8 +82,6 @@ export async function reviewCandidate(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// POST /api/records/submit — analyst pastes real case text (report/chat export/tip)
-// for immediate live analysis. This is real, analyst-supplied data, not demo JSON.
 export async function submitRecord(req, res, next) {
   try {
     const { title, snippet, sourceLabel, timestamp, type } = req.body;
@@ -96,8 +91,8 @@ export async function submitRecord(req, res, next) {
 
     const id = crypto.randomUUID();
     await pool.query(
-      `INSERT INTO signals (id, entity_id, source_id, type, title, snippet, timestamp, confidence, topic)
-       VALUES ($1, NULL, $2, $3, $4, $5, $6, NULL, NULL)`,
+      `INSERT INTO signals (id, entity_id, source_id, source, type, title, snippet, timestamp, confidence, topic)
+       VALUES ($1, NULL, NULL, $2, $3, $4, $5, $6, NULL, NULL)`,
       [
         id,
         sourceLabel || "manual_submission",
@@ -113,8 +108,6 @@ export async function submitRecord(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// POST /api/records/upload — same as submit, but the case text comes from an
-// uploaded .txt file (e.g. an exported chat log or tip-line transcript).
 export async function uploadRecord(req, res, next) {
   try {
     if (!req.file) {
@@ -124,8 +117,8 @@ export async function uploadRecord(req, res, next) {
     const id = crypto.randomUUID();
 
     await pool.query(
-      `INSERT INTO signals (id, entity_id, source_id, type, title, snippet, timestamp, confidence, topic)
-       VALUES ($1, NULL, $2, 'submission', $3, $4, $5, NULL, NULL)`,
+      `INSERT INTO signals (id, entity_id, source_id, source, type, title, snippet, timestamp, confidence, topic)
+       VALUES ($1, NULL, NULL, $2, 'submission', $3, $4, $5, NULL, NULL)`,
       [id, "file_upload", req.file.originalname, snippet, new Date().toISOString()]
     );
 

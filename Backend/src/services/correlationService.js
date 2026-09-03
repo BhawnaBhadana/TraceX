@@ -1,5 +1,4 @@
 import pool from "../config/db.js";
-import crypto from "crypto";
 
 /**
  * Given a signal's CONFIRMED candidates, resolves each one to an entity
@@ -34,15 +33,15 @@ export async function correlateSignal(signalId) {
     for (let j = i + 1; j < uniqueEntityIds.length; j++) {
       const [a, b] = [uniqueEntityIds[i], uniqueEntityIds[j]];
       const existing = await pool.query(
-        `SELECT id FROM relationships WHERE (source = $1 AND target = $2) OR (source = $2 AND target = $1)`,
+        `SELECT id FROM relationships WHERE (source_id = $1 AND target_id = $2) OR (source_id = $2 AND target_id = $1)`,
         [a, b]
       );
       if (existing.rows.length > 0) continue;
 
       await pool.query(
-        `INSERT INTO relationships (id, source, target, type, timestamp, confidence, source_id)
-         VALUES ($1, $2, $3, 'CO_OCCURRENCE', $4, $5, $6)`,
-        [crypto.randomUUID(), a, b, new Date().toISOString(), 60, signal?.source_id || null]
+        `INSERT INTO relationships (source_id, target_id, type, confidence, investigation_id)
+         VALUES ($1, $2, 'CO_OCCURRENCE', $3, $4)`,
+        [a, b, 60, signal?.investigation_id || null]
       );
       relationshipsCreated++;
     }
@@ -54,31 +53,31 @@ export async function correlateSignal(signalId) {
 async function resolveOrCreateEntity(candidate, signal) {
   const value = candidate.canonical_value || candidate.value;
 
-  const matchRes = await pool.query(`SELECT id FROM entities WHERE $1 = ANY(aliases)`, [value]);
+  const matchRes = await pool.query(`SELECT id FROM entities WHERE aliases ? $1`, [value]);
   if (matchRes.rows.length > 0) {
+    const entityId = matchRes.rows[0].id;
     await pool.query(
-      `UPDATE entities SET last_observed = $1, activity = COALESCE(activity, 0) + 1 WHERE id = $2`,
-      [new Date().toISOString(), matchRes.rows[0].id]
+      `UPDATE entities SET last_observed = NOW(), activity = COALESCE(activity, 0) + 1 WHERE id = $1`,
+      [entityId]
     );
-    return matchRes.rows[0].id;
+    return entityId;
   }
 
-  const id = `ENT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-  await pool.query(
-    `INSERT INTO entities (id, type, aliases, sources, priority, first_observed, last_observed, activity, community, description)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+  const insertRes = await pool.query(
+    `INSERT INTO entities (name, type, priority, investigation_id, aliases, sources, activity, community, description, first_observed, last_observed)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+     RETURNING id`,
     [
-      id,
+      value,
       candidate.type,
-      [value],
-      signal?.source_id ? [signal.source_id] : [],
-      candidate.confidence >= 0.8 ? 3 : 2,
-      new Date().toISOString(),
-      new Date().toISOString(),
+      candidate.confidence >= 0.8 ? "HIGH" : "MEDIUM",
+      signal?.investigation_id || null,
+      JSON.stringify([value]),
+      JSON.stringify(signal?.source ? [signal.source] : []),
       1,
       null,
       `Auto-created from a confirmed candidate in signal ${signal?.id || "unknown"}`,
     ]
   );
-  return id;
+  return insertRes.rows[0].id;
 }

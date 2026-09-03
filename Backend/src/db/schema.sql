@@ -38,17 +38,50 @@ CREATE TABLE IF NOT EXISTS relationships (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS signals (
+CREATE TABLE IF NOT EXISTS feed_sources (
   id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  url TEXT NOT NULL,
+  category VARCHAR(100),
+  enabled BOOLEAN DEFAULT TRUE,
+  last_fetched_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS signals (
+  id UUID PRIMARY KEY,
   title VARCHAR(255),
   snippet TEXT,
   source VARCHAR(255),
+  source_id INTEGER REFERENCES feed_sources(id),
   entity_id INTEGER REFERENCES entities(id),
   investigation_id INTEGER REFERENCES investigations(id),
   topic VARCHAR(100),
   type VARCHAR(50),
   confidence NUMERIC(5,2),
+  verification_status VARCHAR(20) DEFAULT 'unverified',
   timestamp TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS keyword_dictionary (
+  id SERIAL PRIMARY KEY,
+  term VARCHAR(255) NOT NULL,
+  canonical_term VARCHAR(255),
+  category VARCHAR(100) NOT NULL,
+  weight NUMERIC(5,2) DEFAULT 0.7
+);
+
+CREATE TABLE IF NOT EXISTS signal_candidates (
+  id UUID PRIMARY KEY,
+  signal_id UUID REFERENCES signals(id),
+  type VARCHAR(50),
+  value TEXT,
+  canonical_value TEXT,
+  confidence NUMERIC(5,2),
+  status VARCHAR(20) DEFAULT 'PENDING_REVIEW',
+  matched_entity_id INTEGER REFERENCES entities(id),
+  reviewed_by INTEGER REFERENCES users(id),
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS evidence (
@@ -79,7 +112,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 
 CREATE TABLE IF NOT EXISTS trends (
-  id SERIAL PRIMARY KEY,
+  id VARCHAR(100) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   growth_percent NUMERIC(6,2),
   confidence NUMERIC(5,2),
@@ -115,23 +148,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   timestamp TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS signal_candidates (
-  id SERIAL PRIMARY KEY,
-  investigation_id INTEGER REFERENCES investigations(id),
-  raw_text TEXT NOT NULL,
-  source VARCHAR(255),
-  extracted_entities JSONB DEFAULT '[]',
-  extracted_aliases JSONB DEFAULT '[]',
-  confidence NUMERIC(5,2),
-  status VARCHAR(20) DEFAULT 'PENDING',
-  matched_entity_id INTEGER REFERENCES entities(id),
-  reviewed_by INTEGER REFERENCES users(id),
-  reviewed_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
 CREATE INDEX IF NOT EXISTS idx_signal_candidates_status ON signal_candidates(status);
-CREATE INDEX IF NOT EXISTS idx_signal_candidates_investigation ON signal_candidates(investigation_id);
+CREATE INDEX IF NOT EXISTS idx_signal_candidates_signal ON signal_candidates(signal_id);
 CREATE INDEX IF NOT EXISTS idx_entities_investigation ON entities(investigation_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_investigation ON alerts(investigation_id);
 CREATE INDEX IF NOT EXISTS idx_signals_investigation ON signals(investigation_id);
+CREATE INDEX IF NOT EXISTS idx_signals_source ON signals(source_id);

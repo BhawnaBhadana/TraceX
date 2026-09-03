@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "../config/db.js";
 import { env } from "../config/env.js";
@@ -33,7 +33,7 @@ export const register = async (req, res) => {
     res.status(201).json({ success: true, token, user });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Registration failed" });
+    res.status(500).json({ success: false, message: "Registration failed", error: error.message });
   }
 };
 
@@ -68,7 +68,7 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Login failed" });
+    res.status(500).json({ success: false, message: "Login failed", error: error.message });
   }
 };
 

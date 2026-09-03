@@ -1,35 +1,44 @@
 import pool from "../config/db.js";
-import crypto from "crypto";
 
 export async function createAuditLog({ userId, action, resource, resourceId, ipAddress }) {
-  const id = crypto.randomUUID();
   await pool.query(
-    `INSERT INTO audit_logs (id, user_id, action, resource, resource_id, ip_address)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [id, userId || null, action, resource || null, resourceId || null, ipAddress || null]
+    `INSERT INTO audit_logs (user_id, action, resource, resource_id, ip_address)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [userId || null, action, resource, resourceId || null, ipAddress || null]
   );
-  return id;
 }
 
 export async function findAuditLogs({ userId, action, resource, limit = 100, offset = 0 } = {}) {
   const conditions = [];
   const values = [];
-  let idx = 1;
 
-  if (userId) { conditions.push(`user_id = $${idx++}`); values.push(userId); }
-  if (action) { conditions.push(`action = $${idx++}`); values.push(action); }
-  if (resource) { conditions.push(`resource = $${idx++}`); values.push(resource); }
+  if (userId) {
+    values.push(userId);
+    conditions.push(`user_id = $${values.length}`);
+  }
+  if (action) {
+    values.push(action);
+    conditions.push(`action = $${values.length}`);
+  }
+  if (resource) {
+    values.push(resource);
+    conditions.push(`resource = $${values.length}`);
+  }
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  values.push(limit, offset);
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  values.push(limit);
+  const limitParam = `$${values.length}`;
+  values.push(offset);
+  const offsetParam = `$${values.length}`;
 
   const result = await pool.query(
     `SELECT id, user_id AS "userId", action, resource, resource_id AS "resourceId",
             ip_address AS "ipAddress", timestamp
      FROM audit_logs
-     ${where}
+     ${whereClause}
      ORDER BY timestamp DESC
-     LIMIT $${idx++} OFFSET $${idx++}`,
+     LIMIT ${limitParam} OFFSET ${offsetParam}`,
     values
   );
   return result.rows;

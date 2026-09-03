@@ -23,17 +23,107 @@ async function request(path, options = {}) {
   return res.json();
 }
 
+function priorityToScore(label) {
+  switch ((label || "").toUpperCase()) {
+    case "CRITICAL": return 95;
+    case "HIGH": return 80;
+    case "MEDIUM": return 60;
+    default: return 40;
+  }
+}
+
+function formatWhy(why) {
+  if (!why) return "";
+  if (typeof why === "string") return why;
+  if (Array.isArray(why.factors)) {
+    return why.factors.map((f) => `+${f.points} ${f.label}`).join(" · ");
+  }
+  return "";
+}
+
+function mapEntity(e) {
+  return {
+    id: String(e.id),
+    code: e.name,
+    type: e.type,
+    aliases: e.aliases || [],
+    sources: e.sources || [],
+    priority: priorityToScore(e.priority),
+    priorityLabel: e.priority,
+    firstObserved: e.firstObserved,
+    lastObserved: e.lastObserved,
+    activity: e.activity ?? 0,
+    community: e.community || null,
+    description: e.description,
+  };
+}
+
+function mapRelationship(r) {
+  return {
+    id: String(r.id),
+    source: String(r.sourceId),
+    target: String(r.targetId),
+    type: r.type,
+    timestamp: r.timestamp,
+    confidence: r.confidence,
+  };
+}
+
+function mapAlert(a) {
+  return {
+    id: String(a.id),
+    severity: a.severity,
+    priority: a.priority,
+    confidence: a.confidence,
+    status: a.status,
+    entityIds: (a.entityIds || []).map(String),
+    evidenceIds: (a.evidenceIds || []).map(String),
+    timestamp: a.timestamp,
+    what: a.what,
+    why: formatWhy(a.why),
+    aiSummary: a.aiSummary,
+  };
+}
+
+function mapTrend(t) {
+  return {
+    id: t.id,
+    name: t.name,
+    growth: t.growth_percent,
+    confidence: t.confidence,
+    entities: (t.entities || []).length,
+    entityIds: (t.entities || []).map(String),
+    status: t.status,
+    color: t.color,
+    description: t.description,
+  };
+}
+
+function mapEvidence(e) {
+  return {
+    id: e.evidenceId,
+    dbId: String(e.id),
+    source: e.source,
+    timestamp: e.timestamp,
+    hash: e.hash,
+    fullHash: e.fullHash,
+    confidence: e.confidence,
+    status: e.status,
+    finding: e.finding,
+  };
+}
+
 export const api = {
   getInvestigations: () => request("/investigations"),
-  getEntities: () => request("/entities"),
-  getEntity: (id) => request(`/entities/${id}`),
+  getEntities: async () => (await request("/entities")).map(mapEntity),
+  getEntity: async (id) => mapEntity(await request(`/entities/${id}`)),
   getEntityScore: (id) => request(`/entities/${id}/score`),
   getEntityMatches: (id) => request(`/entities/${id}/matches`),
   getEntityNetworkMetrics: (id) => request(`/entities/${id}/network-metrics`),
-  getRelationships: () => request("/relationships"),
-  getAlerts: () => request("/alerts"),
-  getTrends: () => request("/trends"),
-  getEvidence: () => request("/evidence"),
+  getRelationships: async () => (await request("/relationships")).map(mapRelationship),
+  getAlerts: async () => (await request("/alerts")).map(mapAlert),
+  getTrends: async () => (await request("/trends")).map(mapTrend),
+  getEvidence: async () => (await request("/evidence")).map(mapEvidence),
   getRecords: () => request("/records"),
   getCategories: () => request("/categories"),
   getNotifications: () => request("/notifications"),

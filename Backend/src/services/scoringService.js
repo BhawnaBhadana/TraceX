@@ -1,18 +1,19 @@
 import pool from "../config/db.js";
 
 export async function computeEntityScore(entityId) {
+  entityId = Number(entityId);
   const entityRes = await pool.query(`SELECT * FROM entities WHERE id = $1`, [entityId]);
   const entity = entityRes.rows[0];
   if (!entity) return null;
 
   const relCountRes = await pool.query(
-    `SELECT COUNT(*)::int AS count FROM relationships WHERE source = $1 OR target = $1`,
+    `SELECT COUNT(*)::int AS count FROM relationships WHERE source_id = $1 OR target_id = $1`,
     [entityId]
   );
   const relationshipCount = relCountRes.rows[0].count;
 
   const alertsRes = await pool.query(
-    `SELECT evidence_ids FROM alerts WHERE $1 = ANY(entity_ids)`,
+    `SELECT evidence_ids FROM alerts WHERE entity_ids @> to_jsonb($1::int)`,
     [entityId]
   );
   const evidenceIds = new Set();
@@ -55,24 +56,25 @@ export async function computeEntityScore(entityId) {
 }
 
 export async function computeNetworkMetrics(entityId) {
+  entityId = Number(entityId);
   const totalEntitiesRes = await pool.query(`SELECT COUNT(*)::int AS count FROM entities`);
   const totalEntities = totalEntitiesRes.rows[0].count;
 
   const relRes = await pool.query(
-    `SELECT source, target FROM relationships WHERE source = $1 OR target = $1`,
+    `SELECT source_id, target_id FROM relationships WHERE source_id = $1 OR target_id = $1`,
     [entityId]
   );
   const degree = relRes.rows.length;
   const degreeCentrality = totalEntities > 1 ? +(degree / (totalEntities - 1)).toFixed(2) : 0;
 
   const neighbors = new Set();
-  relRes.rows.forEach((r) => neighbors.add(r.source === entityId ? r.target : r.source));
+  relRes.rows.forEach((r) => neighbors.add(r.source_id === entityId ? r.target_id : r.source_id));
 
   let neighborEdges = 0;
   if (neighbors.size > 1) {
     const neighborArr = [...neighbors];
     const edgeRes = await pool.query(
-      `SELECT COUNT(*)::int AS count FROM relationships WHERE source = ANY($1) AND target = ANY($1)`,
+      `SELECT COUNT(*)::int AS count FROM relationships WHERE source_id = ANY($1) AND target_id = ANY($1)`,
       [neighborArr]
     );
     neighborEdges = edgeRes.rows[0].count;

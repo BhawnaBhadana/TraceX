@@ -1,5 +1,4 @@
 import pool from "../config/db.js";
-import crypto from "crypto";
 import { computeEntityScore } from "./scoringService.js";
 import { explainAlert } from "./aiService.js";
 import logger from "../utils/logger.js";
@@ -19,12 +18,11 @@ export async function maybeCreateAlert(entityId) {
   if (!scoreData || scoreData.score < ALERT_THRESHOLD) return null;
 
   const existing = await pool.query(
-    `SELECT id FROM alerts WHERE $1 = ANY(entity_ids) AND status NOT IN ('REJECTED', 'ACKNOWLEDGED')`,
+    `SELECT id FROM alerts WHERE entity_ids @> to_jsonb($1::int) AND status NOT IN ('REJECTED', 'ACKNOWLEDGED')`,
     [entityId]
   );
   if (existing.rows.length > 0) return null;
 
-  const id = `ALERT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const what = `Entity ${entityId} crossed the analytical threshold (score ${scoreData.score})`;
   const why = scoreData.reasons.map((r) => `${r.label} (+${r.points})`).join("; ");
 
@@ -32,24 +30,23 @@ export async function maybeCreateAlert(entityId) {
   try {
     aiSummary = await explainAlert({ what, why });
   } catch (err) {
-    logger.error(`AI explanation skipped for ${id}: ${err.message}`);
+    logger.error(`AI explanation skipped for entity ${entityId}: ${err.message}`);
   }
 
-  await pool.query(
-    `INSERT INTO alerts (id, type, severity, priority, confidence, status, entity_ids, evidence_ids, timestamp, what, why, ai_summary)
-     VALUES ($1, 'SCORE_THRESHOLD', $2, $3, $4, 'UNREVIEWED', $5, $6, $7, $8, $9, $10)`,
+  const result = await pool.query(
+    `INSERT INTO alerts (title, severity, priority, confidence, status, entity_ids, evidence_ids, reason, ai_summary)
+     VALUES ($1, $2, $3, $4, 'UNREVIEWED', $5, $6, $7, $8)
+     RETURNING id`,
     [
-      id,
+      what,
       scoreData.score >= 85 ? "HIGH" : "MEDIUM",
       scoreData.score >= 85 ? 1 : 2,
       scoreData.score,
-      [entityId],
-      [],
-      new Date().toISOString(),
-      what,
-      why,
+      JSON.stringify([entityId]),
+      JSON.stringify([]),
+      JSON.stringify({ factors: scoreData.reasons }),
       aiSummary,
     ]
   );
-  return id;
+  return result.rows[0].id;
 }

@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import crypto from "crypto";
 
 async function seed() {
   const client = await pool.connect();
@@ -54,10 +55,12 @@ async function seed() {
     }
 
     // Signals
+    const signalId = crypto.randomUUID();
     await client.query(
-      `INSERT INTO signals (title, snippet, source, entity_id, investigation_id, topic, type, confidence, timestamp)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() - INTERVAL '2 hours')`,
+      `INSERT INTO signals (id, title, snippet, source, entity_id, investigation_id, topic, type, confidence, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW() - INTERVAL '2 hours')`,
       [
+        signalId,
         "Cross-source correlation detected",
         "Repeated alias overlap across two encrypted channels",
         "Synthetic OSINT feed",
@@ -70,9 +73,9 @@ async function seed() {
     );
 
     // Evidence
-    await client.query(
+    const ev = await client.query(
       `INSERT INTO evidence (evidence_id, source, sha256_hash, confidence, status, finding, investigation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       [
         "EVID-0087",
         "Encrypted platform export",
@@ -83,6 +86,7 @@ async function seed() {
         invId,
       ]
     );
+    const evidenceId = ev.rows[0].id;
 
     // Alert
     await client.query(
@@ -96,7 +100,7 @@ async function seed() {
         "OPEN",
         invId,
         JSON.stringify([entityIds["ALPHA-17"], entityIds["BETA-04"], entityIds["ORION-NODE-03"]]),
-        JSON.stringify([]),
+        JSON.stringify([evidenceId]),
         JSON.stringify({
           factors: [
             { label: "Network behavior", points: 24 },
@@ -111,11 +115,14 @@ async function seed() {
     );
 
     // Trend
+    const trendName = "Synthetic drug signal frequency";
+    const trendId = `TREND-${trendName.toUpperCase().replace(/\s+/g, "_")}`;
     await client.query(
-      `INSERT INTO trends (name, growth_percent, confidence, entities, status, color, description, investigation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO trends (id, name, growth_percent, confidence, entities, status, color, description, investigation_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
-        "Synthetic drug signal frequency",
+        trendId,
+        trendName,
         42,
         81,
         JSON.stringify([entityIds["ALPHA-17"], entityIds["MARKET-NODE-08"]]),

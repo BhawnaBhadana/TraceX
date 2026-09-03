@@ -42,10 +42,10 @@ export async function computeTrends() {
 
     const id = `TREND-${category.toUpperCase().replace(/\s+/g, "_")}`;
     await pool.query(
-      `INSERT INTO trends (id, name, growth, confidence, entities, status, color, description)
+      `INSERT INTO trends (id, name, growth_percent, confidence, entities, status, color, description)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id) DO UPDATE SET
-         growth = EXCLUDED.growth, confidence = EXCLUDED.confidence,
+         growth_percent = EXCLUDED.growth_percent, confidence = EXCLUDED.confidence,
          entities = EXCLUDED.entities, status = EXCLUDED.status,
          color = EXCLUDED.color, description = EXCLUDED.description`,
       [id, category, growth, confidence, entities, status, color,

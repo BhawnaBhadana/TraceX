@@ -8,7 +8,8 @@ export async function getEntities(req, res, next) {
       `SELECT id, name, type, aliases, sources, priority,
               first_observed AS "firstObserved",
               last_observed AS "lastObserved",
-              description
+              activity, community,
+              COALESCE(description, '') AS description
        FROM entities`
     );
     res.json(result.rows);
@@ -21,7 +22,8 @@ export async function getEntity(req, res, next) {
       `SELECT id, name, type, aliases, sources, priority,
               first_observed AS "firstObserved",
               last_observed AS "lastObserved",
-              description
+              activity, community,
+              COALESCE(description, '') AS description
        FROM entities WHERE id = $1`,
       [req.params.id]
     );

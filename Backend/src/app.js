@@ -32,7 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/investigations', investigationRoutes);
 app.use('/api/entities', entityRoutes);
 app.use('/api/relationships', relationshipRoutes);
-app.use('/api/signals', signalRoutes);
+app.use('/api/records', signalRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/evidence', evidenceRoutes);
 app.use('/api/trends', trendRoutes);
@@ -40,7 +40,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/ingestion', ingestionRoutes);
-app.use('/api/audit', auditRoutes);
+app.use('/api/audit-logs', auditRoutes);
 
 app.use(errorHandler);
 
