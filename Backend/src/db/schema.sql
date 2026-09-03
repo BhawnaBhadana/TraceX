@@ -1,119 +1,137 @@
 CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'investigator',
-  created_at TIMESTAMPTZ DEFAULT now()
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(100) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role VARCHAR(20) DEFAULT 'ANALYST',
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS investigations (
-  id TEXT PRIMARY KEY,
-  name TEXT,
-  status TEXT,
-  entities INT,
-  records INT,
-  relationships INT,
-  alerts INT,
-  trends INT,
-  updated TEXT
+  id SERIAL PRIMARY KEY,
+  case_code VARCHAR(50) UNIQUE NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  status VARCHAR(20) DEFAULT 'ACTIVE',
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS entities (
-  id TEXT PRIMARY KEY,
-  type TEXT,
-  aliases TEXT[],
-  sources TEXT[],
-  priority INT,
-  first_observed TEXT,
-  last_observed TEXT,
-  activity INT,
-  community TEXT,
-  description TEXT
-);
-
-CREATE TABLE IF NOT EXISTS evidence (
-  id TEXT PRIMARY KEY,
-  type TEXT,
-  source TEXT,
-  timestamp TEXT,
-  hash TEXT,
-  full_hash TEXT,
-  confidence INT,
-  status TEXT DEFAULT 'PENDING REVIEW',
-  finding TEXT
-);
-
-CREATE TABLE IF NOT EXISTS signals (
-  id TEXT PRIMARY KEY,
-  entity_id TEXT,
-  source_id TEXT,
-  type TEXT,
-  title TEXT,
-  snippet TEXT,
-  timestamp TEXT,
-  confidence INT,
-  topic TEXT
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  type VARCHAR(50),
+  priority VARCHAR(20),
+  investigation_id INTEGER REFERENCES investigations(id),
+  aliases JSONB DEFAULT '[]',
+  sources JSONB DEFAULT '[]',
+  description TEXT,
+  first_observed TIMESTAMP,
+  last_observed TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS relationships (
-  id TEXT PRIMARY KEY,
-  source TEXT,
-  target TEXT,
-  type TEXT,
-  timestamp TEXT,
-  confidence INT,
-  source_id TEXT
+  id SERIAL PRIMARY KEY,
+  source_id INTEGER REFERENCES entities(id),
+  target_id INTEGER REFERENCES entities(id),
+  type VARCHAR(50),
+  confidence NUMERIC(5,2),
+  investigation_id INTEGER REFERENCES investigations(id),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS signals (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255),
+  snippet TEXT,
+  source VARCHAR(255),
+  entity_id INTEGER REFERENCES entities(id),
+  investigation_id INTEGER REFERENCES investigations(id),
+  topic VARCHAR(100),
+  type VARCHAR(50),
+  confidence NUMERIC(5,2),
+  timestamp TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS evidence (
+  id SERIAL PRIMARY KEY,
+  evidence_id VARCHAR(50) UNIQUE NOT NULL,
+  source VARCHAR(255),
+  sha256_hash VARCHAR(64),
+  confidence NUMERIC(5,2),
+  status VARCHAR(20) DEFAULT 'PENDING',
+  finding TEXT,
+  investigation_id INTEGER REFERENCES investigations(id),
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS alerts (
-  id TEXT PRIMARY KEY,
-  type TEXT,
-  severity TEXT,
-  priority INT,
-  confidence INT,
-  status TEXT DEFAULT 'UNREVIEWED',
-  entity_ids TEXT[],
-  evidence_ids TEXT[],
-  timestamp TEXT,
-  what TEXT,
-  why TEXT
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  severity VARCHAR(20),
+  priority INTEGER,
+  confidence NUMERIC(5,2),
+  status VARCHAR(20) DEFAULT 'OPEN',
+  investigation_id INTEGER REFERENCES investigations(id),
+  entity_ids JSONB DEFAULT '[]',
+  evidence_ids JSONB DEFAULT '[]',
+  reason JSONB DEFAULT '{}',
+  ai_summary TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS trends (
-  id TEXT PRIMARY KEY,
-  name TEXT,
-  growth INT,
-  confidence INT,
-  entities INT,
-  status TEXT,
-  color TEXT,
-  description TEXT
-);
-
-CREATE TABLE IF NOT EXISTS notifications (
-  id TEXT PRIMARY KEY,
-  title TEXT,
-  detail TEXT,
-  route TEXT,
-  alert_id TEXT,
-  entity_id TEXT,
-  trend_id TEXT,
-  unread BOOLEAN DEFAULT true,
-  time TEXT
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  growth_percent NUMERIC(6,2),
+  confidence NUMERIC(5,2),
+  entities JSONB DEFAULT '[]',
+  status VARCHAR(20),
+  color VARCHAR(20),
+  description TEXT,
+  investigation_id INTEGER REFERENCES investigations(id),
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS categories (
   id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE
+  name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  message TEXT,
+  read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
-  id TEXT PRIMARY KEY,
-  user_id TEXT,
-  action TEXT,
-  resource TEXT,
-  resource_id TEXT,
-  ip_address TEXT,
-  timestamp TIMESTAMPTZ DEFAULT now()
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  action VARCHAR(100),
+  resource VARCHAR(100),
+  resource_id INTEGER,
+  ip_address VARCHAR(50),
+  timestamp TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS signal_candidates (
+  id SERIAL PRIMARY KEY,
+  investigation_id INTEGER REFERENCES investigations(id),
+  raw_text TEXT NOT NULL,
+  source VARCHAR(255),
+  extracted_entities JSONB DEFAULT '[]',
+  extracted_aliases JSONB DEFAULT '[]',
+  confidence NUMERIC(5,2),
+  status VARCHAR(20) DEFAULT 'PENDING',
+  matched_entity_id INTEGER REFERENCES entities(id),
+  reviewed_by INTEGER REFERENCES users(id),
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_candidates_status ON signal_candidates(status);
+CREATE INDEX IF NOT EXISTS idx_signal_candidates_investigation ON signal_candidates(investigation_id);
+CREATE INDEX IF NOT EXISTS idx_entities_investigation ON entities(investigation_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_investigation ON alerts(investigation_id);
+CREATE INDEX IF NOT EXISTS idx_signals_investigation ON signals(investigation_id);

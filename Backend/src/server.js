@@ -39,6 +39,11 @@ app.get("/", (req, res) => {
   res.json({ message: "TRACE-X API is running" });
 });
 
+// Simple liveness check — no DB call, just confirms the server is up
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 app.get("/api/test-db", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW()");
@@ -70,9 +75,6 @@ const PORT = env.port;
 app.listen(PORT, () => {
   logger.info(`🚀 TRACE-X backend running on port ${PORT}`);
 
-  // Every 15 minutes: pull fresh public data, then recompute trends from
-  // whatever was just extracted. Keeps the dashboard live without anyone
-  // clicking anything — useful for the app to look alive during judging.
   cron.schedule("*/15 * * * *", async () => {
     try {
       const ingested = await runIngestionCycle();

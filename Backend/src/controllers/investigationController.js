@@ -5,7 +5,7 @@ import { summarizeInvestigation } from "../services/aiService.js";
 export const getInvestigations = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT * FROM investigations ORDER BY updated DESC`
+      `SELECT * FROM investigations ORDER BY created_at DESC`
     );
     res.json({ success: true, investigations: result.rows });
   } catch (error) {
