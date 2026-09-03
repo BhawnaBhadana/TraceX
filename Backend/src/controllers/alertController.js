@@ -4,10 +4,13 @@ import pool from "../config/db.js";
 export async function getAlerts(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT id, type, severity, priority, confidence, status,
+      `SELECT id, title, severity, priority, confidence, status,
               entity_ids AS "entityIds",
               evidence_ids AS "evidenceIds",
-              timestamp, what, why, ai_summary AS "aiSummary"
+              created_at AS "timestamp",
+              title AS "what",
+              reason AS "why",
+              ai_summary AS "aiSummary"
        FROM alerts`
     );
     res.json(result.rows);
@@ -17,9 +20,11 @@ export async function getAlerts(req, res, next) {
 async function updateAlertStatus(id, status) {
   const result = await pool.query(
     `UPDATE alerts SET status = $1 WHERE id = $2
-     RETURNING id, type, severity, priority, confidence, status,
+     RETURNING id, title, severity, priority, confidence, status,
                entity_ids AS "entityIds", evidence_ids AS "evidenceIds",
-               timestamp, what, why`,
+               created_at AS "timestamp",
+               title AS "what",
+               reason AS "why"`,
     [status, id]
   );
   return result.rows[0];
@@ -34,7 +39,9 @@ export async function verifySignal(req, res, next) {
     if (alert.evidenceIds?.length) {
       const evResult = await pool.query(
         `UPDATE evidence SET status = 'VERIFIED' WHERE id = $1
-         RETURNING id, type, source, timestamp, hash, full_hash AS "fullHash", confidence, status, finding`,
+         RETURNING id, source, created_at AS "timestamp",
+                   sha256_hash AS "hash", sha256_hash AS "fullHash",
+                   confidence, status, finding`,
         [alert.evidenceIds[0]]
       );
       evidence = evResult.rows[0] || null;

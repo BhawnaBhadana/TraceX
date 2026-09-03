@@ -1,14 +1,14 @@
 import pool from "../config/db.js";
 import { computeEntityScore, computeNetworkMetrics } from "../services/scoringService.js";
-import { findPotentialMatches } from "../services/entityResolutionService.js"; // fixed: was "resolutionService.js" (file didn't exist)
+import { findPotentialMatches } from "../services/entityResolutionService.js";
 
 export async function getEntities(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT id, type, aliases, sources, priority,
+      `SELECT id, name, type, aliases, sources, priority,
               first_observed AS "firstObserved",
               last_observed AS "lastObserved",
-              activity, community, description
+              description
        FROM entities`
     );
     res.json(result.rows);
@@ -18,10 +18,10 @@ export async function getEntities(req, res, next) {
 export async function getEntity(req, res, next) {
   try {
     const result = await pool.query(
-      `SELECT id, type, aliases, sources, priority,
+      `SELECT id, name, type, aliases, sources, priority,
               first_observed AS "firstObserved",
               last_observed AS "lastObserved",
-              activity, community, description
+              description
        FROM entities WHERE id = $1`,
       [req.params.id]
     );

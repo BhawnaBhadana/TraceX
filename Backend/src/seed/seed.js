@@ -1,96 +1,140 @@
-import dotenv from "dotenv";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import pool from "../config/db.js";
-import {
-  entities, records, relationships, alerts, trends,
-  evidence, investigations, notifications, categories,
-} from "./seedData.js";
 
-dotenv.config();
+async function seed() {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-async function run() {
-  await pool.query(`TRUNCATE notifications, categories, alerts, evidence, relationships, signals, trends, entities, investigations, users`);
+    // Clear existing data first (safe to re-run)
+    await client.query(`
+      TRUNCATE TABLE signal_candidates, trends, alerts, evidence, signals,
+      relationships, entities, investigations RESTART IDENTITY CASCADE
+    `);
 
-  for (const inv of investigations) {
-    await pool.query(
-      `INSERT INTO investigations (id, name, status, entities, records, relationships, alerts, trends, updated)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [inv.id, inv.name, inv.status, inv.entities, inv.records, inv.relationships, inv.alerts, inv.trends, inv.updated]
+    // Investigation
+    const inv = await client.query(
+      `INSERT INTO investigations (case_code, title, status)
+       VALUES ($1, $2, $3) RETURNING id`,
+      ["CASE-2026-014", "Operation Orion", "ACTIVE"]
     );
-  }
+    const invId = inv.rows[0].id;
 
-  for (const e of entities) {
-    await pool.query(
-      `INSERT INTO entities (id, type, aliases, sources, priority, first_observed, last_observed, activity, community, description)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [e.id, e.type, e.aliases, e.sources, e.priority, e.firstObserved, e.lastObserved, e.activity, e.community, e.description]
+    // Entities
+    const entities = [
+      ["ALPHA-17", "PERSON", "HIGH"],
+      ["BETA-04", "PERSON", "MEDIUM"],
+      ["ORION-NODE-03", "CHANNEL", "HIGH"],
+      ["MARKET-NODE-08", "MARKETPLACE", "CRITICAL"],
+      ["NORTH-ROUTE-12", "LOCATION", "MEDIUM"],
+    ];
+    const entityIds = {};
+    for (const [name, type, priority] of entities) {
+      const r = await client.query(
+        `INSERT INTO entities (name, type, priority, investigation_id, first_observed, last_observed)
+         VALUES ($1, $2, $3, $4, NOW() - INTERVAL '30 days', NOW())
+         RETURNING id`,
+        [name, type, priority, invId]
+      );
+      entityIds[name] = r.rows[0].id;
+    }
+
+    // Relationships
+    const rels = [
+      ["ALPHA-17", "BETA-04", "COMMUNICATED_WITH", 0.91],
+      ["ALPHA-17", "MARKET-NODE-08", "LISTED_ON", 0.87],
+      ["BETA-04", "ORION-NODE-03", "MEMBER_OF", 0.83],
+      ["MARKET-NODE-08", "NORTH-ROUTE-12", "ASSOCIATED_WITH", 0.76],
+    ];
+    for (const [a, b, type, conf] of rels) {
+      await client.query(
+        `INSERT INTO relationships (source_id, target_id, type, confidence, investigation_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [entityIds[a], entityIds[b], type, conf, invId]
+      );
+    }
+
+    // Signals
+    await client.query(
+      `INSERT INTO signals (title, snippet, source, entity_id, investigation_id, topic, type, confidence, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() - INTERVAL '2 hours')`,
+      [
+        "Cross-source correlation detected",
+        "Repeated alias overlap across two encrypted channels",
+        "Synthetic OSINT feed",
+        entityIds["ALPHA-17"],
+        invId,
+        "network_activity",
+        "correlation",
+        94,
+      ]
     );
-  }
 
-  for (const r of records) {
-    await pool.query(
-      `INSERT INTO signals (id, entity_id, source_id, type, title, snippet, timestamp, confidence, topic)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [r.id, r.entityId, r.sourceId, r.type, r.title, r.snippet, r.timestamp, r.confidence, r.topic]
+    // Evidence
+    await client.query(
+      `INSERT INTO evidence (evidence_id, source, sha256_hash, confidence, status, finding, investigation_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        "EVID-0087",
+        "Encrypted platform export",
+        "a8f2c91e4b7d0a3f5c8e2d1b9a7f6e4c3d2b1a0f9e8d7c6b5a4f3e2d1c0b9a87",
+        94,
+        "VERIFIED",
+        "Cross-referenced alias match confirms entity linkage",
+        invId,
+      ]
     );
-  }
 
-  for (const rel of relationships) {
-    await pool.query(
-      `INSERT INTO relationships (id, source, target, type, timestamp, confidence, source_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [rel.id, rel.source, rel.target, rel.type, rel.timestamp, rel.confidence, rel.sourceId]
+    // Alert
+    await client.query(
+      `INSERT INTO alerts (title, severity, priority, confidence, status, investigation_id, entity_ids, evidence_ids, reason, ai_summary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        "ALERT-009: Cross-source correlation detected",
+        "CRITICAL",
+        91,
+        94,
+        "OPEN",
+        invId,
+        JSON.stringify([entityIds["ALPHA-17"], entityIds["BETA-04"], entityIds["ORION-NODE-03"]]),
+        JSON.stringify([]),
+        JSON.stringify({
+          factors: [
+            { label: "Network behavior", points: 24 },
+            { label: "Cross-source match", points: 22 },
+            { label: "Signal frequency", points: 20 },
+            { label: "Historical activity", points: 15 },
+            { label: "Route association", points: 10 },
+          ],
+        }),
+        "TRACE-X flagged repeated cross-platform activity linking ALPHA-17 to a known marketplace node, with corroborating signals from two independent sources.",
+      ]
     );
-  }
 
-  for (const a of alerts) {
-    await pool.query(
-      `INSERT INTO alerts (id, type, severity, priority, confidence, status, entity_ids, evidence_ids, timestamp, what, why)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [a.id, a.type, a.severity, a.priority, a.confidence, a.status, a.entityIds, a.evidenceIds, a.timestamp, a.what, a.why]
+    // Trend
+    await client.query(
+      `INSERT INTO trends (name, growth_percent, confidence, entities, status, color, description, investigation_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        "Synthetic drug signal frequency",
+        42,
+        81,
+        JSON.stringify([entityIds["ALPHA-17"], entityIds["MARKET-NODE-08"]]),
+        "RISING",
+        "red",
+        "Marked increase in cross-source mentions over the past 7 days",
+        invId,
+      ]
     );
+
+    await client.query("COMMIT");
+    console.log("✅ Seed complete — Operation Orion loaded");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("❌ Seed failed:", err);
+  } finally {
+    client.release();
+    process.exit();
   }
-
-  for (const t of trends) {
-    await pool.query(
-      `INSERT INTO trends (id, name, growth, confidence, entities, status, color, description)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [t.id, t.name, t.growth, t.confidence, t.entities, t.status, t.color, t.description]
-    );
-  }
-
-  for (const ev of evidence) {
-    await pool.query(
-      `INSERT INTO evidence (id, type, source, timestamp, hash, full_hash, confidence, status, finding)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [ev.id, ev.type, ev.source, ev.timestamp, ev.hash, ev.fullHash, ev.confidence, ev.status, ev.finding]
-    );
-  }
-
-  for (const n of notifications) {
-    await pool.query(
-      `INSERT INTO notifications (id, title, detail, route, alert_id, entity_id, trend_id, unread, time)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [n.id, n.title, n.detail, n.route, n.alertId || null, n.entityId || null, n.trendId || null, n.unread, n.time]
-    );
-  }
-
-  for (const name of categories) {
-    await pool.query(`INSERT INTO categories (name) VALUES ($1) ON CONFLICT DO NOTHING`, [name]);
-  }
-
-  const hashed = await bcrypt.hash("ChangeMe123!", 10);
-  await pool.query(
-    `INSERT INTO users (id, name, email, password, role) VALUES ($1,$2,$3,$4,$5)`,
-    [crypto.randomUUID(), "A. Patel", "apatel@tracex.local", hashed, "investigator"]
-  );
-
-  console.log("Seed complete. Login: apatel@tracex.local / ChangeMe123!");
-  await pool.end();
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+seed();
