@@ -141,6 +141,7 @@ export const api = {
     const res = await request("/investigations");
     return { ...res, investigations: (res.investigations || []).map(mapInvestigation) };
   },
+  getInvestigationSummary: (id) => request(`/investigations/${id}/summary`),
   getEntities: async () => (await request("/entities")).map(mapEntity),
   getEntity: async (id) => mapEntity(await request(`/entities/${id}`)),
   getEntityScore: (id) => request(`/entities/${id}/score`),

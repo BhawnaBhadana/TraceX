@@ -28,13 +28,23 @@ export function similarity(a, b) {
  * based on alias similarity, shared sources, and entity type. Every match returns
  * the exact reasons behind its score — this is what feeds the explainability panel,
  * so an analyst never sees a bare "87% match" with no way to check it.
+ *
+ * Deliberately searches across ALL entities, not just the current investigation —
+ * this is what lets TRACE-X surface the same alias appearing in a different case
+ * entirely, which is a real cross-unit intelligence gap in most investigations.
  */
 export async function findPotentialMatches(entityId) {
   const targetRes = await pool.query(`SELECT * FROM entities WHERE id = $1`, [entityId]);
   const target = targetRes.rows[0];
   if (!target) return [];
 
-  const othersRes = await pool.query(`SELECT * FROM entities WHERE id != $1`, [entityId]);
+  const othersRes = await pool.query(
+    `SELECT e.*, i.title AS investigation_title
+     FROM entities e
+     LEFT JOIN investigations i ON i.id = e.investigation_id
+     WHERE e.id != $1`,
+    [entityId]
+  );
 
   const matches = [];
   for (const candidate of othersRes.rows) {
@@ -78,6 +88,9 @@ export async function findPotentialMatches(entityId) {
         aliases: candidate.aliases,
         confidence: Math.min(100, score),
         reasons,
+        investigationId: candidate.investigation_id,
+        investigationTitle: candidate.investigation_title,
+        isCrossInvestigation: candidate.investigation_id !== target.investigation_id,
       });
     }
   }

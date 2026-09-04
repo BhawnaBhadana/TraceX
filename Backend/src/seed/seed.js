@@ -64,7 +64,68 @@ async function seed() {
       entityIds[name] = r.rows[0].id;
     }
 
-    // ---------- RELATIONSHIPS (30 total; 10 touch ALPHA-17 directly) ----------
+    // ---------- CROSS-INVESTIGATION DEMO ENTITY ----------
+    // Lives in "Case Horizon" (archived), not Operation Orion. Its alias/type/source
+    // overlap with DELTA-22 is close enough that the existing entity-resolution
+    // algorithm (unchanged) surfaces it as DELTA-22's top potential match, demonstrating
+    // cross-case identity resolution. DELTA-22 has no other match candidates, so this
+    // stays its only (and therefore top) result.
+    await pool.query(
+      `INSERT INTO entities (name, type, priority, investigation_id, aliases, sources, activity, description, first_observed, last_observed)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        "DELTA-22B",
+        "PERSON",
+        "MEDIUM",
+        invIds["Case Horizon"],
+        JSON.stringify(["DELTA-22B"]),
+        JSON.stringify(["SOURCE-02"]),
+        22,
+        "Person profile observed in Case Horizon, alias pattern consistent with a contact tracked in Operation Orion.",
+        "2025-11-10T10:00:00.000Z",
+        "2025-12-02T16:45:00.000Z",
+      ]
+    );
+
+    // ---------- DIGITAL IDENTIFIERS: WALLET + EMAIL ----------
+    // Directly maps to PS-3's "cryptocurrency wallets, email addresses" requirement.
+    const walletRes = await pool.query(
+      `INSERT INTO entities (name, type, priority, investigation_id, aliases, sources, activity, description, first_observed, last_observed)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [
+        "bc1q4x9k2m8p3vw7z5j6h1n0s",
+        "WALLET",
+        "HIGH",
+        invId,
+        JSON.stringify(["bc1q4x9k2m8p3vw7z5j6h1n0s"]),
+        JSON.stringify(["Financial intercept", "SOURCE-04"]),
+        61,
+        "Cryptocurrency wallet observed receiving payments tied to MARKET-NODE-08 listings.",
+        "2026-08-10T00:00:00.000Z",
+        "2026-09-02T00:00:00.000Z",
+      ]
+    );
+    entityIds["WALLET-BC1Q4X9K"] = walletRes.rows[0].id;
+
+    const emailRes = await pool.query(
+      `INSERT INTO entities (name, type, priority, investigation_id, aliases, sources, activity, description, first_observed, last_observed)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [
+        "shadowdrop77@protonmail.com",
+        "EMAIL",
+        "MEDIUM",
+        invId,
+        JSON.stringify(["shadowdrop77@protonmail.com"]),
+        JSON.stringify(["Encrypted platform export"]),
+        38,
+        "Contact email associated with ALPHA-17's marketplace registration.",
+        "2026-08-06T00:00:00.000Z",
+        "2026-09-01T00:00:00.000Z",
+      ]
+    );
+    entityIds["EMAIL-SHADOWDROP77"] = emailRes.rows[0].id;
+
+    // ---------- RELATIONSHIPS (32 total; 10 touch ALPHA-17 directly) ----------
     const relationshipsData = [
       ["ALPHA-17", "BETA-04", "COMMUNICATED_WITH", 0.91],
       ["ALPHA-17", "ORION-NODE-03", "MEMBER_OF", 0.88],
@@ -96,6 +157,8 @@ async function seed() {
       ["LIMA-02", "MARKET-NODE-11", "LISTED_ON", 0.54],
       ["SOURCE-01", "ORION-NODE-03", "MENTIONED_IN", 0.67],
       ["SOURCE-02", "SILVER-THREAD", "RELATED_TO", 0.56],
+      ["MARKET-NODE-08", "WALLET-BC1Q4X9K", "PAID_VIA", 0.81],
+      ["ALPHA-17", "EMAIL-SHADOWDROP77", "REGISTERED_WITH", 0.76],
     ];
     for (const [a, b, type, conf] of relationshipsData) {
       await pool.query(
@@ -242,7 +305,7 @@ async function seed() {
     }
 
     console.log("✅ Seed complete — Operation Orion demo network loaded");
-    console.log(`   Entities: ${entitiesData.length}`);
+    console.log(`   Entities: ${entitiesData.length + 3} (includes 1 cross-investigation demo entity, 1 wallet, 1 email)`);
     console.log(`   Relationships: ${relationshipsData.length}`);
     console.log(`   Signals: ${signalsData.length}`);
     console.log(`   Alerts: ${1 + secondaryAlertsData.length}`);
