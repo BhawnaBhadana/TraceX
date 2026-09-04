@@ -36,7 +36,8 @@ function formatWhy(why) {
   if (!why) return "";
   if (typeof why === "string") return why;
   if (Array.isArray(why.factors)) {
-    return why.factors.map((f) => `+${f.points} ${f.label}`).join(" · ");
+    const total = why.factors.reduce((sum, f) => sum + f.points, 0);
+    return `${why.factors.map((f) => `+${f.points} ${f.label}`).join(" · ")} · Total: ${total}`;
   }
   return "";
 }

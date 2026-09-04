@@ -24,8 +24,6 @@ async function loadData() {
       api.getInvestigations(), api.getEntities(), api.getRelationships(), api.getAlerts(),
       api.getTrends(), api.getEvidence(), api.getRecords(), api.getCategories(), api.getNotifications(),
     ]);
-    // getInvestigations responds { success, investigations: [...] }; everything else
-    // responds with a plain array straight from the DB.
     investigations = investigationsRes.investigations || [];
     entities = entitiesRes;
     relationships = relationshipsRes;
@@ -34,7 +32,18 @@ async function loadData() {
     evidence = evidenceRes;
     records = recordsRes;
     categories = categoriesRes;
-    setState({ notifications: notificationsRes });
+
+    // state.js's initial selection defaults are leftover demo-data ids
+    // ("ALPHA-17", "ALERT-009", ...) that no longer match real numeric ids.
+    // Correct them once real data is in, so every consumer of these fields
+    // always has a genuinely valid id from the first render onward.
+    const selectionPatch = { notifications: notificationsRes };
+    if (!entities.find((e) => e.id === appState.selectedEntity)) selectionPatch.selectedEntity = entities[0]?.id || null;
+    if (!alerts.find((a) => a.id === appState.selectedAlert)) selectionPatch.selectedAlert = alerts[0]?.id || null;
+    if (!evidence.find((ev) => ev.id === appState.selectedEvidence)) selectionPatch.selectedEvidence = evidence[0]?.id || null;
+    if (!trends.find((t) => t.id === appState.selectedTrend)) selectionPatch.selectedTrend = trends[0]?.id || null;
+    setState(selectionPatch);
+
     dataLoaded = true;
     dataError = null;
   } catch (err) {
@@ -470,7 +479,8 @@ async function openScoreDrawer(entityId = appState.selectedEntity) {
   openOverlay(`<div class="drawer-header"><div><span class="eyebrow">EXPLAINABILITY</span><h2>Why this score?</h2></div><button class="icon-button" data-action="close-overlay" aria-label="Close explanation">${icon("x")}</button></div><p class="drawer-copy">Calculating…</p>`, "drawer-overlay");
   try {
     const data = await api.getEntityScore(entityId);
-    const content = `<div class="drawer-header"><div><span class="eyebrow">EXPLAINABILITY</span><h2>Why this score?</h2></div><button class="icon-button" data-action="close-overlay" aria-label="Close explanation">${icon("x")}</button></div><div class="score-drawer-hero"><strong>${data.score}<small>/100</small></strong><div>${priorityBadge(data.score)}<p>Computed live from relationship, evidence and alert data</p></div></div><p class="drawer-copy">This score is computed from ${data.relationshipCount} relationships, ${data.evidenceCount} linked evidence items and ${data.alertCount} linked alerts. It is an analytical prioritization signal, not a determination of criminal activity.</p><div class="score-breakdown">${data.reasons.map((r) => `<div class="score-factor"><div class="score-factor-top"><span>${icon("plus")} ${escapeHtml(r.label)}</span><b>+${r.points}</b></div></div>`).join("")}</div><div class="drawer-actions"><button class="button button-primary button-wide" data-action="close-overlay">Close ${icon("check")}</button></div>`;
+    const total = data.reasons.reduce((sum, r) => sum + r.points, 0);
+    const content = `<div class="drawer-header"><div><span class="eyebrow">EXPLAINABILITY</span><h2>Why this score?</h2></div><button class="icon-button" data-action="close-overlay" aria-label="Close explanation">${icon("x")}</button></div><div class="score-drawer-hero"><strong>${data.score}<small>/100</small></strong><div>${priorityBadge(data.score)}<p>Computed live from relationship, evidence and alert data</p></div></div><p class="drawer-copy">This score is computed from ${data.relationshipCount} relationships, ${data.evidenceCount} linked evidence items and ${data.alertCount} linked alerts. It is an analytical prioritization signal, not a determination of criminal activity.</p><div class="score-breakdown">${data.reasons.map((r) => `<div class="score-factor"><div class="score-factor-top"><span>${icon("plus")} ${escapeHtml(r.label)}</span><b>+${r.points}</b></div></div>`).join("")}<div class="score-factor"><div class="score-factor-top"><span><b>Total</b></span><b>${total}</b></div></div></div><div class="drawer-actions"><button class="button button-primary button-wide" data-action="close-overlay">Close ${icon("check")}</button></div>`;
     openOverlay(content, "drawer-overlay");
   } catch (err) {
     openOverlay(`<div class="drawer-header"><div><span class="eyebrow">EXPLAINABILITY</span><h2>Why this score?</h2></div><button class="icon-button" data-action="close-overlay" aria-label="Close explanation">${icon("x")}</button></div><p class="drawer-copy">Could not load score. Try again.</p>`, "drawer-overlay");
