@@ -94,10 +94,10 @@ async function seed() {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         "ALERT-009: Cross-source correlation detected",
-        "CRITICAL",
+        "HIGH",
         91,
         94,
-        "OPEN",
+        "UNREVIEWED",
         invId,
         JSON.stringify([entityIds["ALPHA-17"], entityIds["BETA-04"], entityIds["ORION-NODE-03"]]),
         JSON.stringify([evidenceId]),

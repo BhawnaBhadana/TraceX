@@ -72,6 +72,7 @@ function mapRelationship(r) {
 function mapAlert(a) {
   return {
     id: String(a.id),
+    type: a.type || "Analytical Signal",
     severity: a.severity,
     priority: a.priority,
     confidence: a.confidence,
@@ -113,8 +114,21 @@ function mapEvidence(e) {
   };
 }
 
+function mapInvestigation(inv) {
+  return {
+    id: String(inv.id),
+    caseCode: inv.case_code,
+    name: inv.title,
+    status: inv.status,
+    createdAt: inv.created_at,
+  };
+}
+
 export const api = {
-  getInvestigations: () => request("/investigations"),
+  getInvestigations: async () => {
+    const res = await request("/investigations");
+    return { ...res, investigations: (res.investigations || []).map(mapInvestigation) };
+  },
   getEntities: async () => (await request("/entities")).map(mapEntity),
   getEntity: async (id) => mapEntity(await request(`/entities/${id}`)),
   getEntityScore: (id) => request(`/entities/${id}/score`),
