@@ -4,12 +4,22 @@ import logger from "../utils/logger.js";
 
 export async function generateReport(req, res, next) {
   try {
-    const [entities, records, relationships, evidence, alerts] = await Promise.all([
+    const investigationRes = req.body?.investigationId
+      ? await pool.query(`SELECT * FROM investigations WHERE id = $1`, [req.body.investigationId])
+      : await pool.query(`SELECT * FROM investigations ORDER BY created_at DESC LIMIT 1`);
+
+    const investigation = investigationRes.rows[0];
+    if (!investigation) {
+      return res.status(404).json({ success: false, message: "No investigation found" });
+    }
+
+    const [entities, records, relationships, evidence, alerts, risk] = await Promise.all([
       pool.query(`SELECT COUNT(*)::int AS count FROM entities`),
       pool.query(`SELECT COUNT(*)::int AS count FROM signals`),
       pool.query(`SELECT COUNT(*)::int AS count FROM relationships`),
       pool.query(`SELECT COUNT(*)::int AS count FROM evidence`),
       pool.query(`SELECT COUNT(*)::int AS count FROM alerts`),
+      pool.query(`SELECT AVG(confidence)::numeric(5,2) AS "avgRiskScore", MAX(priority)::int AS "highestPriority" FROM alerts`),
     ]);
 
     const stats = {
@@ -18,6 +28,8 @@ export async function generateReport(req, res, next) {
       relationships: relationships.rows[0].count,
       evidence: evidence.rows[0].count,
       alerts: alerts.rows[0].count,
+      avgRiskScore: risk.rows[0].avgRiskScore ? Number(risk.rows[0].avgRiskScore) : null,
+      highestPriority: risk.rows[0].highestPriority,
     };
 
     // Best-effort — if Groq is unavailable, the report still generates with
@@ -25,7 +37,7 @@ export async function generateReport(req, res, next) {
     let aiExecutiveSummary = null;
     try {
       aiExecutiveSummary = await summarizeReport({
-        investigation: req.body?.investigation || "OPERATION-ORION",
+        investigation: investigation.title,
         stats,
       });
     } catch (err) {
@@ -34,9 +46,11 @@ export async function generateReport(req, res, next) {
 
     res.json({
       id: `REPORT-${Date.now().toString().slice(-6)}`,
-      title: `${req.body?.investigation || "Operation Orion"} Intelligence Report`,
+      title: `${investigation.title} Intelligence Report`,
       generatedAt: new Date().toISOString(),
-      investigation: req.body?.investigation || "OPERATION-ORION",
+      investigationId: investigation.id,
+      investigationCaseCode: investigation.case_code,
+      investigation: investigation.title,
       generatedBy: req.user.name,
       sections: 12,
       stats,
