@@ -148,10 +148,19 @@ export const api = {
   register: (name, email, password) =>
     request("/auth/register", { method: "POST", body: JSON.stringify({ name, email, password }) }),
 
-  verifySignal: (id) => request(`/alerts/${id}/verify`, { method: "POST" }),
-  rejectSignal: (id) => request(`/alerts/${id}/reject`, { method: "POST" }),
-  requestMoreEvidence: (id) => request(`/alerts/${id}/request-evidence`, { method: "POST" }),
-  acknowledgeAlert: (id) => request(`/alerts/${id}/acknowledge`, { method: "POST" }),
+  verifySignal: async (id) => {
+    const res = await request(`/alerts/${id}/verify`, { method: "POST" });
+    return { ...res, alert: mapAlert(res.alert), evidence: res.evidence ? mapEvidence(res.evidence) : null };
+  },
+  rejectSignal: async (id) => {
+    const res = await request(`/alerts/${id}/reject`, { method: "POST" });
+    return { ...res, alert: mapAlert(res.alert) };
+  },
+  requestMoreEvidence: async (id) => {
+    const res = await request(`/alerts/${id}/request-evidence`, { method: "POST" });
+    return { ...res, alert: mapAlert(res.alert) };
+  },
+  acknowledgeAlert: (id) => request(`/alerts/${id}/acknowledge`, { method: "POST" }).then(mapAlert),
 
   generateReport: () => request("/reports/generate", { method: "POST" }),
 };

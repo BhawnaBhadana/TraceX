@@ -24,7 +24,8 @@ async function updateAlertStatus(id, status) {
                entity_ids AS "entityIds", evidence_ids AS "evidenceIds",
                created_at AS "timestamp",
                title AS "what",
-               reason AS "why"`,
+               reason AS "why",
+               ai_summary AS "aiSummary"`,
     [status, id]
   );
   return result.rows[0];
@@ -39,9 +40,7 @@ export async function verifySignal(req, res, next) {
     if (alert.evidenceIds?.length) {
       const evResult = await pool.query(
         `UPDATE evidence SET status = 'VERIFIED' WHERE id = $1
-         RETURNING id, source, created_at AS "timestamp",
-                   sha256_hash AS "hash", sha256_hash AS "fullHash",
-                   confidence, status, finding`,
+         RETURNING id, evidence_id AS "evidenceId", source, created_at AS "timestamp", sha256_hash AS "hash", sha256_hash AS "fullHash", confidence, status, finding`,
         [alert.evidenceIds[0]]
       );
       evidence = evResult.rows[0] || null;
