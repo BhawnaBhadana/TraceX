@@ -25,7 +25,7 @@ export async function generateReport(req, res, next) {
     let aiExecutiveSummary = null;
     try {
       aiExecutiveSummary = await summarizeReport({
-        investigation: req.body.investigation || "OPERATION-ORION",
+        investigation: req.body?.investigation || "OPERATION-ORION",
         stats,
       });
     } catch (err) {
@@ -34,9 +34,9 @@ export async function generateReport(req, res, next) {
 
     res.json({
       id: `REPORT-${Date.now().toString().slice(-6)}`,
-      title: `${req.body.investigation || "Operation Orion"} Intelligence Report`,
+      title: `${req.body?.investigation || "Operation Orion"} Intelligence Report`,
       generatedAt: new Date().toISOString(),
-      investigation: req.body.investigation || "OPERATION-ORION",
+      investigation: req.body?.investigation || "OPERATION-ORION",
       generatedBy: req.user.name,
       sections: 12,
       stats,

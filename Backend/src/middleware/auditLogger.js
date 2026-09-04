@@ -13,7 +13,7 @@ export function auditLog(action, resource) {
         userId: req.user?.id,
         action,
         resource,
-        resourceId: req.params?.id,
+        resourceId: req.params?.id || req.params?.candidateId || null,
         ipAddress: req.ip,
       }).catch((err) => logger.error(`Audit log failed: ${err.message}`));
     });
