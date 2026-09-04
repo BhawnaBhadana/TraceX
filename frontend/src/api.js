@@ -124,6 +124,17 @@ function mapInvestigation(inv) {
   };
 }
 
+function mapAuditLog(log) {
+  return {
+    id: String(log.id),
+    actor: log.actorName || "TRACE-X",
+    action: log.action,
+    resource: log.resource,
+    resourceId: log.resourceId ? String(log.resourceId) : null,
+    timestamp: log.timestamp,
+  };
+}
+
 export const api = {
   getInvestigations: async () => {
     const res = await request("/investigations");
@@ -141,6 +152,10 @@ export const api = {
   getRecords: () => request("/records"),
   getCategories: () => request("/categories"),
   getNotifications: () => request("/notifications"),
+  getAuditLogs: async () => {
+    const res = await request("/audit-logs");
+    return (res.logs || []).map(mapAuditLog);
+  },
 
   login: (email, password) =>
     request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),

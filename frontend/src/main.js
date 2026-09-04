@@ -351,10 +351,37 @@ function renderReports() {
 }
 
 function renderAudit() {
-  const events = [
-    ["13 Aug 2026 · 09:42", "A. Patel", "Opened ALERT-009", "Review queue"], ["13 Aug 2026 · 09:36", "TRACE-X", "Generated EVD-0087", "Entity resolution"], ["13 Aug 2026 · 09:21", "A. Patel", "Selected ALPHA-17", "Entity profile"], ["12 Aug 2026 · 18:15", "TRACE-X", "Created ALERT-004", "Activity spike"], ["12 Aug 2026 · 15:08", "TRACE-X", "Flagged potential entity match", "Resolution engine"], ["11 Aug 2026 · 11:22", "A. Patel", "Acknowledged ALERT-002", "Network cluster"]
-  ];
-  return `${pageFrame("GOVERNANCE", "Audit Trail", "A transparent record of analyst actions and automated signal generation in this demonstration workspace.", `<button class="button button-secondary" data-action="export-audit">${icon("download")} Export audit log</button>`)}<div class="page-content"><div class="audit-banner"><div class="audit-icon">${icon("scroll-text")}</div><div><span class="eyebrow">AUDIT LOG</span><h2>Every decision leaves a trace.</h2><p>Demo activity is deterministic and local. Production deployments should connect these events to an immutable server-side audit store.</p></div><div class="audit-status">${statusBadge("ENABLED")}</div></div><div class="audit-layout"><section class="panel audit-table"><div class="panel-header"><div><div class="eyebrow">ACTIVITY LOG</div><h3>Recent events</h3></div><span class="muted">Last 6 events</span></div>${events.map((event) => `<div class="audit-row"><span class="audit-time">${event[0]}</span><span class="audit-actor">${event[1] === "TRACE-X" ? icon("cpu") : icon("user-round")} ${event[1]}</span><span class="audit-event"><b>${event[2]}</b><small>${event[3]}</small></span><span class="audit-check">${icon("check-circle-2")}</span></div>`).join("")}</section><aside class="panel governance-panel"><div class="eyebrow">SYSTEM STATUS</div><div class="governance-status"><span class="status-dot status-dot-live"></span><strong>Operational</strong></div><div class="governance-list"><div><span>DATA SOURCE</span><b>PostgreSQL (live)</b></div><div><span>ACCESS</span><b>${escapeHtml(appState.user.role)}</b></div><div><span>SESSION</span><b>Authenticated</b></div><div><span>INTEGRITY</span><b>SHA-256 enabled</b></div></div><button class="button button-secondary button-wide" data-action="signout">${icon("log-out")} Return to access gateway</button></aside></div></div>`;
+  return `${pageFrame("GOVERNANCE", "Audit Trail", "A transparent record of analyst actions and automated signal generation in this demonstration workspace.", `<button class="button button-secondary" data-action="export-audit">${icon("download")} Export audit log</button>`)}<div class="page-content"><div class="audit-banner"><div class="audit-icon">${icon("scroll-text")}</div><div><span class="eyebrow">AUDIT LOG</span><h2>Every decision leaves a trace.</h2><p>Actions recorded here are written live to PostgreSQL as analysts and TRACE-X take action.</p></div><div class="audit-status">${statusBadge("ENABLED")}</div></div><div class="audit-layout"><section class="panel audit-table"><div class="panel-header"><div><div class="eyebrow">ACTIVITY LOG</div><h3>Recent events</h3></div><span class="muted" id="auditLogCount">Loading…</span></div><div id="auditLogBody">${emptyState("LOADING", "Fetching the latest audit events…")}</div></section><aside class="panel governance-panel"><div class="eyebrow">SYSTEM STATUS</div><div class="governance-status"><span class="status-dot status-dot-live"></span><strong>Operational</strong></div><div class="governance-list"><div><span>DATA SOURCE</span><b>PostgreSQL (live)</b></div><div><span>ACCESS</span><b>${escapeHtml(appState.user.role)}</b></div><div><span>SESSION</span><b>Authenticated</b></div><div><span>INTEGRITY</span><b>SHA-256 enabled</b></div></div><button class="button button-secondary button-wide" data-action="signout">${icon("log-out")} Return to access gateway</button></aside></div></div>`;
+}
+
+function auditRow(log) {
+  const shortId = log.resourceId ? (log.resourceId.length > 12 ? `${log.resourceId.slice(0, 8)}…` : log.resourceId) : "";
+  const detail = shortId ? `${log.resource} · ${shortId}` : log.resource;
+  return `<div class="audit-row"><span class="audit-time">${formatAuditTime(log.timestamp)}</span><span class="audit-actor">${log.actor === "TRACE-X" ? icon("cpu") : icon("user-round")} ${escapeHtml(log.actor)}</span><span class="audit-event"><b>${escapeHtml(log.action.replaceAll("_", " "))}</b><small>${escapeHtml(detail)}</small></span><span class="audit-check">${icon("check-circle-2")}</span></div>`;
+}
+
+function formatAuditTime(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  const datePart = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const timePart = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${datePart} · ${timePart}`;
+}
+
+async function loadAuditLog() {
+  const body = document.getElementById("auditLogBody");
+  const countEl = document.getElementById("auditLogCount");
+  try {
+    const logs = await api.getAuditLogs();
+    if (body) body.innerHTML = logs.length ? logs.slice(0, 20).map((log) => auditRow(log)).join("") : emptyState("NO AUDIT EVENTS", "Analyst actions will appear here once recorded.");
+    if (countEl) countEl.textContent = `Last ${Math.min(logs.length, 20)} events`;
+    refreshIcons();
+  } catch (err) {
+    console.error("Failed to load audit log", err);
+    if (body) body.innerHTML = emptyState("COULD NOT LOAD", "You may not have permission to view the audit log, or the server is unreachable.");
+    if (countEl) countEl.textContent = "";
+  }
 }
 
 function renderRouteEnhancements(route) {
@@ -363,6 +390,7 @@ function renderRouteEnhancements(route) {
   if (route === "network") { createNetwork("networkGraph", false); loadNetworkAnalytics(); }
   if (route === "timeline") createTimelineChart("timelineChart");
   if (route === "entity") loadEntityProfileExtras(appState.selectedEntity);
+  if (route === "audit") loadAuditLog();
 }
 
 function destroyCharts() {
