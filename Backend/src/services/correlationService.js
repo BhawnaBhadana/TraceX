@@ -1,4 +1,7 @@
 import pool from "../config/db.js";
+import { similarity } from "./entityResolutionService.js";
+
+const AUTO_MERGE_THRESHOLD = 0.85;
 
 /**
  * Given a signal's CONFIRMED candidates, resolves each one to an entity
@@ -50,17 +53,47 @@ export async function correlateSignal(signalId) {
   return { entityIds: uniqueEntityIds, relationshipsCreated };
 }
 
+/**
+ * Resolves a confirmed candidate to an entity: exact alias match first, then a
+ * fuzzy pass reusing entityResolutionService's Levenshtein similarity() against
+ * every existing entity's aliases — the same algorithm the /matches endpoint uses
+ * for analyst-facing duplicate suggestions, applied here as an auto-merge gate
+ * with a stricter threshold since no human confirms this specific decision.
+ * Falls through to creating a new entity only when nothing clears the bar.
+ */
 async function resolveOrCreateEntity(candidate, signal) {
   const value = candidate.canonical_value || candidate.value;
 
-  const matchRes = await pool.query(`SELECT id FROM entities WHERE aliases ? $1`, [value]);
-  if (matchRes.rows.length > 0) {
-    const entityId = matchRes.rows[0].id;
+  const exactMatch = await pool.query(`SELECT id FROM entities WHERE aliases ? $1`, [value]);
+  if (exactMatch.rows.length > 0) {
+    const entityId = exactMatch.rows[0].id;
     await pool.query(
       `UPDATE entities SET last_observed = NOW(), activity = COALESCE(activity, 0) + 1 WHERE id = $1`,
       [entityId]
     );
     return entityId;
+  }
+
+  const allEntities = await pool.query(`SELECT id, aliases FROM entities`);
+  let bestEntityId = null;
+  let bestScore = 0;
+  for (const row of allEntities.rows) {
+    for (const alias of row.aliases || []) {
+      const score = similarity(value, alias);
+      if (score > bestScore) {
+        bestScore = score;
+        bestEntityId = row.id;
+      }
+    }
+  }
+  if (bestEntityId && bestScore >= AUTO_MERGE_THRESHOLD) {
+    await pool.query(
+      `UPDATE entities
+       SET aliases = aliases || to_jsonb($1::text), last_observed = NOW(), activity = COALESCE(activity, 0) + 1
+       WHERE id = $2`,
+      [value, bestEntityId]
+    );
+    return bestEntityId;
   }
 
   const insertRes = await pool.query(

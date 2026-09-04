@@ -1,6 +1,7 @@
 import pool from "../config/db.js";
 import { computeEntityScore } from "./scoringService.js";
 import { explainAlert } from "./aiService.js";
+import { createEvidence } from "./evidenceService.js";
 import logger from "../utils/logger.js";
 
 const ALERT_THRESHOLD = 70;
@@ -33,6 +34,34 @@ export async function maybeCreateAlert(entityId) {
     logger.error(`AI explanation skipped for entity ${entityId}: ${err.message}`);
   }
 
+  // Trace this alert back to the real signal that produced the entity, and
+  // record a hashed evidence entry from that actual source text — so an alert
+  // has a genuine, re-verifiable evidentiary basis instead of an empty array.
+  const evidenceIds = [];
+  try {
+    const signalRes = await pool.query(
+      `SELECT DISTINCT s.snippet, s.source, s.investigation_id
+       FROM signal_candidates sc
+       JOIN signals s ON s.id = sc.signal_id
+       WHERE sc.matched_entity_id = $1 AND sc.status = 'CONFIRMED'
+       LIMIT 1`,
+      [entityId]
+    );
+    if (signalRes.rows.length > 0 && signalRes.rows[0].snippet) {
+      const signal = signalRes.rows[0];
+      const evidence = await createEvidence({
+        source: signal.source || "signal",
+        content: signal.snippet,
+        confidence: scoreData.score,
+        finding: `Source record for entity ${entityId}: ${what}`,
+        investigationId: signal.investigation_id,
+      });
+      evidenceIds.push(evidence.id);
+    }
+  } catch (err) {
+    logger.error(`Evidence creation skipped for entity ${entityId}: ${err.message}`);
+  }
+
   const result = await pool.query(
     `INSERT INTO alerts (title, severity, priority, confidence, status, entity_ids, evidence_ids, reason, ai_summary)
      VALUES ($1, $2, $3, $4, 'UNREVIEWED', $5, $6, $7, $8)
@@ -43,7 +72,7 @@ export async function maybeCreateAlert(entityId) {
       scoreData.score >= 85 ? 1 : 2,
       scoreData.score,
       JSON.stringify([entityId]),
-      JSON.stringify([]),
+      JSON.stringify(evidenceIds),
       JSON.stringify({ factors: scoreData.reasons }),
       aiSummary,
     ]

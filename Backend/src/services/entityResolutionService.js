@@ -16,7 +16,7 @@ function levenshtein(a, b) {
   return dp[m][n];
 }
 
-function similarity(a, b) {
+export function similarity(a, b) {
   if (!a || !b) return 0;
   const distance = levenshtein(a.toLowerCase(), b.toLowerCase());
   const maxLen = Math.max(a.length, b.length);
