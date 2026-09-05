@@ -8,6 +8,24 @@ function hashOf(text) {
   return crypto.createHash("sha256").update(text).digest("hex");
 }
 
+// Shared retry wrapper: gpt-oss-20b occasionally burns its whole token
+// budget on internal reasoning and returns a near-empty string. Retry a
+// couple of times and only accept a response that's actually a full
+// sentence — never save a visibly cut-off summary.
+async function generateAiSummary(what, why) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const candidate = await explainAlert({ what, why });
+      if (candidate && candidate.trim().length >= 30) return candidate;
+      console.error(`AI explanation attempt ${attempt} came back too short ("${candidate}") — retrying`);
+    } catch (err) {
+      console.error(`AI explanation attempt ${attempt} failed:`, err.message);
+    }
+  }
+  console.error(`AI explanation still incomplete after 3 attempts for "${what}" — leaving blank`);
+  return null;
+}
+
 async function seed() {
   try {
     await pool.query(`
@@ -65,11 +83,6 @@ async function seed() {
     }
 
     // ---------- CROSS-INVESTIGATION DEMO ENTITY ----------
-    // Lives in "Case Horizon" (archived), not Operation Orion. Its alias/type/source
-    // overlap with DELTA-22 is close enough that the existing entity-resolution
-    // algorithm (unchanged) surfaces it as DELTA-22's top potential match, demonstrating
-    // cross-case identity resolution. DELTA-22 has no other match candidates, so this
-    // stays its only (and therefore top) result.
     await pool.query(
       `INSERT INTO entities (name, type, priority, investigation_id, aliases, sources, activity, description, first_observed, last_observed)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
@@ -88,7 +101,6 @@ async function seed() {
     );
 
     // ---------- DIGITAL IDENTIFIERS: WALLET + EMAIL ----------
-    // Directly maps to PS-3's "cryptocurrency wallets, email addresses" requirement.
     const walletRes = await pool.query(
       `INSERT INTO entities (name, type, priority, investigation_id, aliases, sources, activity, description, first_observed, last_observed)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
@@ -241,13 +253,7 @@ async function seed() {
 
     const what = `ALPHA-17 crossed the analytical threshold (score ${scoreData.score}) following cross-source correlation with BETA-04 and ORION-NODE-03`;
     const why = scoreData.reasons.map((r) => `${r.label} (+${r.points})`).join("; ");
-
-    let aiSummary = null;
-    try {
-      aiSummary = await explainAlert({ what, why });
-    } catch (err) {
-      console.error("AI explanation skipped during seed:", err.message);
-    }
+    const aiSummary = await generateAiSummary(what, why);
 
     await pool.query(
       `UPDATE alerts SET title = $1, confidence = $2, priority = $3, reason = $4, ai_summary = $5 WHERE id = $6`,
@@ -264,14 +270,18 @@ async function seed() {
     ];
     const secondaryAlertIds = [];
     for (const [title, severity, priority, confidence, status, entNames] of secondaryAlertsData) {
+      const points = confidence >= 70 ? 20 : 10;
+      const secWhy = `Analytical pattern match (+${points})`;
+      const secAiSummary = await generateAiSummary(title, secWhy);
       const r = await pool.query(
-        `INSERT INTO alerts (title, severity, priority, confidence, status, investigation_id, entity_ids, evidence_ids, reason)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        `INSERT INTO alerts (title, severity, priority, confidence, status, investigation_id, entity_ids, evidence_ids, reason, ai_summary)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
         [
           title, severity, priority, confidence, status, invId,
           JSON.stringify(entNames.map((n) => entityIds[n])),
           JSON.stringify([]),
-          JSON.stringify({ factors: [{ label: "Analytical pattern match", points: confidence >= 70 ? 20 : 10 }] }),
+          JSON.stringify({ factors: [{ label: "Analytical pattern match", points }] }),
+          secAiSummary,
         ]
       );
       secondaryAlertIds.push({ id: r.rows[0].id, status });
@@ -308,7 +318,7 @@ async function seed() {
     console.log(`   Entities: ${entitiesData.length + 3} (includes 1 cross-investigation demo entity, 1 wallet, 1 email)`);
     console.log(`   Relationships: ${relationshipsData.length}`);
     console.log(`   Signals: ${signalsData.length}`);
-    console.log(`   Alerts: ${1 + secondaryAlertsData.length}`);
+    console.log(`   Alerts: ${1 + secondaryAlertsData.length} (all 6 now carry an AI summary)`);
     console.log(`   Evidence: ${evidenceData.length}`);
     console.log(`   Investigations: ${investigationsData.length}`);
     console.log(`   Flagship investigation ID: ${invId}`);

@@ -49,7 +49,7 @@ export async function summarizeInvestigation(investigationData) {
 // so explainability isn't traded away for a nicer sentence.
 export async function explainAlert({ what, why }) {
   const prompt = `Rewrite this rule-based detection as ONE clear, neutral sentence for a human analyst. Do not add any claim that isn't already in the text below.\n\nFinding: ${what}\nRule-based reasons: ${why}\n\nStart the sentence with "This was flagged because".`;
-  return callGroq(prompt, { maxTokens: 300 });
+  return callGroq(prompt, { maxTokens: 700 });
 }
 
 // Optional executive-summary paragraph for generated reports.
